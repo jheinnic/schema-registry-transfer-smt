@@ -220,7 +220,7 @@ public class SchemaRegistryTransfer<R extends ConnectRecord<R>> implements Trans
     }
 
     private static class SchemaAndId {
-        private Integer id;
+        private int id;
         private org.apache.avro.Schema schema;
 
         SchemaAndId() {
@@ -236,7 +236,7 @@ public class SchemaRegistryTransfer<R extends ConnectRecord<R>> implements Trans
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             SchemaAndId schemaAndId = (SchemaAndId) o;
-            return Objects.equals(id, schemaAndId.id) &&
+            return (this.id == schemaAndId.id) &&
                     Objects.equals(schema, schemaAndId.schema);
         }
 

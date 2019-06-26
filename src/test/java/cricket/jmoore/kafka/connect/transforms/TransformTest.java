@@ -21,7 +21,6 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -40,8 +39,6 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 import static org.apache.avro.Schema.Type.INT;
 import static org.apache.avro.Schema.Type.BOOLEAN;
 import static org.apache.avro.Schema.Type.STRING;
-
-@SuppressWarnings("unchecked")
 public class TransformTest {
 
     private static final Logger log = LoggerFactory.getLogger(TransformTest.class);
@@ -71,15 +68,15 @@ public class TransformTest {
     @RegisterExtension
     final SchemaRegistryMock destSchemaRegistry = new SchemaRegistryMock();
 
-    private SchemaRegistryTransfer smt;
+    private SchemaRegistryTransfer<SourceRecord> smt;
     private Map<String, Object> smtConfiguration;
 
-    private ConnectRecord createRecord(Schema keySchema, Object key, Schema valueSchema, Object value) {
+    private SourceRecord createRecord(Schema keySchema, Object key, Schema valueSchema, Object value) {
         // partition and offset aren't needed
         return new SourceRecord(null, null, TOPIC, keySchema, key, valueSchema, value);
     }
 
-    private ConnectRecord createRecord(byte[] key, byte[] value) {
+    private SourceRecord createRecord(byte[] key, byte[] value) {
         return createRecord(Schema.OPTIONAL_BYTES_SCHEMA, key, Schema.OPTIONAL_BYTES_SCHEMA, value);
     }
 
@@ -122,7 +119,7 @@ public class TransformTest {
 
     @BeforeEach
     public void setup() {
-        smt = new SchemaRegistryTransfer();
+        smt = new SchemaRegistryTransfer<SourceRecord>();
         smtConfiguration = getRequiredTransformConfigs();
     }
 
@@ -130,7 +127,7 @@ public class TransformTest {
     public void applyKeySchemaNotBytes() {
         configure(true);
 
-        ConnectRecord record = createRecord(null, null, null, null);
+        SourceRecord record = createRecord(null, null, null, null);
 
         // The key schema is not a byte[]
         assertThrows(ConnectException.class, () -> smt.apply(record));
@@ -140,7 +137,7 @@ public class TransformTest {
     public void applyValueSchemaNotBytes() {
         configure(false);
 
-        ConnectRecord record = createRecord(null, null, null, null);
+        SourceRecord record = createRecord(null, null, null, null);
 
         // The value schema is not a byte[]
         assertThrows(ConnectException.class, () -> smt.apply(record));
@@ -152,7 +149,7 @@ public class TransformTest {
 
         // allocate enough space for the magic-byte
         byte[] b = ByteBuffer.allocate(1).array();
-        ConnectRecord record = createRecord(null, b, null, null);
+        SourceRecord record = createRecord(null, b, null, null);
 
         // The key payload is not long enough for schema registry wire-format
         assertThrows(SerializationException.class, () -> smt.apply(record));
@@ -164,7 +161,7 @@ public class TransformTest {
 
         // allocate enough space for the magic-byte
         byte[] b = ByteBuffer.allocate(1).array();
-        ConnectRecord record = createRecord(null, null, null, b);
+        SourceRecord record = createRecord(null, null, null, b);
 
         // The value payload is not long enough for schema registry wire-format
         assertThrows(SerializationException.class, () -> smt.apply(record));
@@ -175,7 +172,7 @@ public class TransformTest {
         configure(true);
 
         byte[] b = ByteBuffer.allocate(6).array();
-        ConnectRecord record = createRecord(null, b, null, null);
+        SourceRecord record = createRecord(null, b, null, null);
 
         // tries to lookup schema id 0, but that isn't a valid id
         assertThrows(ConnectException.class, () -> smt.apply(record));
@@ -186,7 +183,7 @@ public class TransformTest {
         configure(false);
 
         byte[] b = ByteBuffer.allocate(6).array();
-        ConnectRecord record = createRecord(null, null, null, b);
+        SourceRecord record = createRecord(null, null, null, b);
 
         // tries to lookup schema id 0, but that isn't a valid id
         assertThrows(ConnectException.class, () -> smt.apply(record));
@@ -219,7 +216,7 @@ public class TransformTest {
         try {
             ByteArrayOutputStream out = encodeAvroObject(schema, sourceId, "hello, world");
 
-            ConnectRecord record = createRecord(Schema.OPTIONAL_BYTES_SCHEMA, out.toByteArray(), null, null);
+            SourceRecord record = createRecord(Schema.OPTIONAL_BYTES_SCHEMA, out.toByteArray(), null, null);
 
             // check the destination has no versions for this subject
             SchemaRegistryClient destClient = destSchemaRegistry.getSchemaRegistryClient();
@@ -280,13 +277,13 @@ public class TransformTest {
         }
 
         byte[] value = null;
-        ConnectRecord appliedRecord = null;
+        SourceRecord appliedRecord = null;
         int destinationId = -1;
         try {
             ByteArrayOutputStream out = encodeAvroObject(schema, sourceId, "hello, world");
 
             value = out.toByteArray();
-            ConnectRecord record = createRecord(null, value);
+            SourceRecord record = createRecord(null, value);
 
             // check the destination has no versions for this subject
             SchemaRegistryClient destClient = destSchemaRegistry.getSchemaRegistryClient();
@@ -369,7 +366,7 @@ public class TransformTest {
 
         byte[] key = null;
         byte[] value = null;
-        ConnectRecord appliedRecord = null;
+        SourceRecord appliedRecord = null;
         int destinationKeyId = -1;
         int destinationValueId = -1;
         try {
@@ -378,7 +375,7 @@ public class TransformTest {
 
             key = keyStream.toByteArray();
             value = valueStream.toByteArray();
-            ConnectRecord record = createRecord(key, value);
+            SourceRecord record = createRecord(key, value);
 
             // check the destination has no versions for this subject
             SchemaRegistryClient destClient = destSchemaRegistry.getSchemaRegistryClient();
@@ -459,10 +456,10 @@ public class TransformTest {
     public void testTombstoneRecord() {
         configure(false);
 
-        ConnectRecord record = createRecord(null, null, Schema.OPTIONAL_BYTES_SCHEMA, null);
+        SourceRecord record = createRecord(null, null, Schema.OPTIONAL_BYTES_SCHEMA, null);
 
         log.info("applying transformation");
-        ConnectRecord appliedRecord = assertDoesNotThrow(() -> smt.apply(record));
+        SourceRecord appliedRecord = assertDoesNotThrow(() -> smt.apply(record));
 
         assertEquals(record.valueSchema(), appliedRecord.valueSchema(), "value schema unchanged");
         assertNull(appliedRecord.value());
@@ -500,7 +497,7 @@ public class TransformTest {
             ByteArrayOutputStream out = encodeAvroObject(NAME_SCHEMA, sourceId, record1);
 
             byte[] value = out.toByteArray();
-            ConnectRecord record = createRecord(null, value);
+            SourceRecord record = createRecord(null, value);
 
             GenericData.Record record2 = new GenericRecordBuilder(NAME_SCHEMA_ALIASED)
                     .set("first", "fname")
@@ -509,7 +506,7 @@ public class TransformTest {
             out = encodeAvroObject(NAME_SCHEMA_ALIASED, nextSourceId, record2);
 
             byte[] nextValue = out.toByteArray();
-            ConnectRecord nextRecord = createRecord(null, nextValue);
+            SourceRecord nextRecord = createRecord(null, nextValue);
 
             // check the destination has no versions for this subject
             SchemaRegistryClient destClient = destSchemaRegistry.getSchemaRegistryClient();
@@ -574,12 +571,12 @@ public class TransformTest {
             ByteArrayOutputStream out = encodeAvroObject(nextSchema, nextSourceId, null);
 
             byte[] value = out.toByteArray();
-            ConnectRecord record = createRecord(null, value);
+            SourceRecord record = createRecord(null, value);
 
             out = encodeAvroObject(schema, sourceId, null);
 
             byte[] nextValue = out.toByteArray();
-            ConnectRecord nextRecord = createRecord(null, nextValue);
+            SourceRecord nextRecord = createRecord(null, nextValue);
 
             // check the destination has no versions for this subject
             SchemaRegistryClient destClient = destSchemaRegistry.getSchemaRegistryClient();
